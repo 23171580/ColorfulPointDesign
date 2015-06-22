@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Points Text Editer</title>
+<meta name="viewport" content=" width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<style>
+body{
+	background:#333;
+	margin:0px;
+	}
+#topbar{
+	width: 100%;
+	height: 22px;
+	padding: 6px 0px;
+	position: fixed;
+	top: 0px;
+	left: 0px;
+	line-height: 20px;
+	background: #000;
+	color: #FFF;
+	border-bottom: 1px solid #666;
+	font-size: 14px;
+}	
+.topbar_fl_left{
+	-webkit-border-radius: 2px;
+	float: left;
+	margin-left: 6px;
+	padding: 0px 5px;
+	background: #333;
+	border: 1px solid #666;
+}
+.topbar_fl_right{
+	-webkit-user-select: none;
+	-webkit-transition:all 0.3s;
+	-webkit-border-radius: 2px;
+	float:right;
+	margin-right: 6px;
+	padding: 0px 5px;
+	background: #333;
+	border: 1px solid #666;
+	color: #666;
+}
+.sizechoose_highlight{
+	border: 1px solid #FFF;
+	color: #FFF;
+}
+#canvas{
+	display:block;
+	-webkit-transition:all 0.5s;
+	-webkit-border-radius: 5px;
+	box-shadow: 0px 0px 10px #000;
+	background:#FFF;
+	margin-left:auto;
+	margin-right:auto;
+	margin-top:70px;
+	margin-bottom: 30px;
+	line-height:300px;
+	text-align:center;
+	}
+#resdiv{
+	-webkit-border-radius: 5px;
+	border: 1px solid #666;
+	background: #000;
+	color: #999;
+	width: 80%;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 5px;
+	line-height: 14px;
+	font-size: 12px;
+}
+#bottombar{
+	position: fixed;
+	bottom: 0px;
+	left: 0px;
+	width: 100%;
+	padding: 6px 6px;
+	background: #000;
+	border-top: 1px solid #666;
+}
+.bottombar_fl_left{
+	-webkit-border-radius: 3px;
+	height: 22px;
+	float: left;
+	background: #333;
+	padding: 0px 6px;
+	margin-right: 6px;
+	font-size: 12px;
+	color: #FFFFFF;
+	line-height: 22px;
+	border: 1px solid #666;
+}
+.bottombar_fl_left input{
+	height: 20px;
+	line-height: 20px;
+	line-height: normal;
+	text-align: center;
+	background: #333;
+	padding: 0px;
+	margin: 0px;
+	border: 0px;
+	color: #FFF;
+	width: 30px;
+}
+</style>
+</head>
+<body>
+<div id="topbar">
+	<div id="topbar_pointsnum" class="topbar_fl_left"></div>
+	<div id="topbar_size" class="topbar_fl_left"></div>
+	<div id="sizechoose"></div>
+</div>
+<canvas id="canvas">浏览器不支持Canvas</canvas>
+<div id="resdiv"></div>
+<div id="bottombar">
+	<div class="bottombar_fl_left">新数据产生延迟:<input id="cannew_timeout" type="text" placeholder="80">ms</div>
+	<div class="bottombar_fl_left">最大半径:<input id="r_small" type="text" placeholder="10">ms</div>
+	<div class="bottombar_fl_left">最小半径:<input id="r_big" type="text" placeholder="20">ms</div>
+</div>
+
+<script src="js/jquery-2.1.1.min.js"></script>
+<script>
+var resDefault='Here is your array';
+var textPoints=new Array();
+var fillColors=new Array('#df4949','#dba2f9','#0072b0','#fa8272','#7f7365','#d0c9c3','#7eebff','#f8ca4d','#8fd5d5','#45b29d');
+var cellsize=[[200,240],[400,480],[480,400],[600,400],[800,500],[1000,500],[1200,500]];
+var cellsize_num=0;
+var r_small=10;
+var r_big=20;
+
+var c=document.getElementById('canvas');
+window.onload=function(){
+	setSizeDivText();
+	setCanvasSize();
+	draw();//这里仅仅是画基准线
+	c.onmousedown=function(ev){
+		c.onmousemove=function(ev){
+			newpoint(ev);
+			c.onmouseup=function(ev){
+				c.onmousemove=null;
+			}
+		}
+	}
+	c.onclick=function(ev){
+		newpoint(ev);
+		}
+	var cannew=1;//是不是可以进行绘制
+				 //----1代表可以绘制
+				 //----0代表不可以绘制
+	var cannew_timeout_val=80;//延迟间隔
+	//最下面的设置控件
+	$('#cannew_timeout').change(function(){
+		if($('#cannew_timeout').val()!=''){
+			cannew_timeout_val=$('#cannew_timeout').val();
+		}
+	})
+	$('#r_small').change(function(){
+		if($('#r_small').val()!=''){
+			r_small=$('#r_small').val();
+		}
+	})
+	$('#r_big').change(function(){
+		if($('#r_big').val()!=''){
+			r_big=$('#r_big').val();
+		}
+	})
+	//最下面的设置控件结束
+	function newpoint(ev){
+		if(cannew==1){//可以绘制
+			cannew=0;//设置为不可绘制，阻止一定时间内下一个绘制动作
+			setTimeout(function(){
+				cannew=1;
+			},cannew_timeout_val)
+			var tempCilckX=clickXY(ev,'x',c);//获取在canvas上的点击位置 x
+			var tempCilckY=clickXY(ev,'y',c);//获取在canvas上的点击位置 y
+			var temp_r=Math.floor(Math.random()*(r_big-r_small)+r_small);
+			var temp_fillcolor=fillColors[Math.floor(Math.random()*fillColors.length)];
+			var tempXyObj={
+				'x':tempCilckX,
+				'y':tempCilckY,
+				'r':temp_r,
+				'fillcolor':temp_fillcolor
+			};
+			textPoints.push(tempXyObj);
+			$('#resdiv').html(jsonArrayToText(textPoints)[0]);
+			$('#topbar_pointsnum').html('Points x'+jsonArrayToText(textPoints)[1])
+			//canvas即时展现
+			draw();
+		}
+		else{
+			
+		}
+		
+	}
+	}
+//尺寸显示组件
+function setSizeDivText(){//页面加载后初始化右上角的尺寸显示
+	//初始化每个里面的文字
+	for(var i=0;i<cellsize.length;i++){
+		//为了以后方便操作，为每个按钮设置一个自定义属性
+		var tempBtn='<div class="topbar_fl_right" sizeindex='+i+'>'+cellsize[i][0]+'x'+cellsize[i][1]+'</div>';
+		$('#sizechoose').append(tempBtn);
+	}
+	//获取生成的右上角所有的尺寸显示块
+	sizeSizeDivs=$('#sizechoose').children();
+	//点击右上角尺寸选择按钮时的动作
+	sizeSizeDivs.click(function(){
+		cellsize_num=$(this).attr('sizeindex');
+		setCanvasSize();
+	})
+}
+
+//设置或者是刷新基础大小
+function setCanvasSize(){
+	//还原所有尺寸显示为灰色
+	sizeSizeDivs.removeClass('sizechoose_highlight');
+	//设置具体属性
+	var canvas_x=cellsize[cellsize_num][0];
+	var canvas_y=cellsize[cellsize_num][1];
+	c.style.width=canvas_x+'px';
+	c.style.height=canvas_y+'px';
+	c.width=canvas_x;
+	c.height=canvas_y;
+	//清空画布和变量
+	//清空当前已经保存的数据
+	textPoints=new Array();//清空保存的数组
+	var point_num=jsonArrayToText(textPoints)[0];
+	if(point_num!=0){
+		$('#resdiv').html(point_num);
+	}
+	else{
+		$('#resdiv').html(resDefault);
+	}
+	$('#topbar_pointsnum').html('Points x'+jsonArrayToText(textPoints)[1])
+	//将当前尺寸显示到顶栏
+	$('#topbar_size').html('CellSize '+c.width+'x'+c.height);
+	//更新右上角的按钮
+	sizeSizeDivs.eq(cellsize_num).addClass('sizechoose_highlight');
+	
+	draw();//这里仅仅是画基准线
+}
+function jsonArrayToText(array){//这个函数将保存的位置对象转化为可以输出的格式
+	var returnArray=new Array();
+	var tags=new Array('x','y')
+	$.each(array,function(){//遍历每一个点
+		var tempTagsVal=new Array();
+		for(var i=0;i<tags.length;i++){
+			tempTagsVal.push(tags[i]+':'+this[tags[i]]);
+		}
+		//到了这里，已经获取到了此点的属性值的数组tempTagsVal
+		var onePointStr='{'+tempTagsVal.join(',')+'}';
+		//获得了一个点的所有属性{...}
+		returnArray.push(onePointStr);
+	})
+	return [returnArray.join(','),returnArray.length];
+}
+function canvasResetSize(){//重新设置画布尺寸
+	screenHeight=window.innerHeight;//全局变量-屏幕高度
+	screenWidth=window.innerWidth;//全局变量-屏幕宽度
+	c.height=screenHeight;
+	c.width=screenWidth;
+}
+function draw(){
+	if(c.getContext('2d')){
+		oc=c.getContext('2d');
+		//所有画图的代码都在这里
+		getLineNun();
+		drawBaseLine();
+		$.each(textPoints,function(){//解析保存的Json
+			drawBaseO(this.x,this.y,this.r,0,this.fillcolor,'#333')
+		})
+		//画图代码 结束
+		}
+	else{
+		alert('浏览器不支持')
+		}	
+}
+var line1_y=new Array();
+var line2_x=new Array();
+function getLineNun(){//计算出基准线的数据
+	//line1
+	nowWidth=cellsize[cellsize_num][0];
+	nowHeight=cellsize[cellsize_num][1];
+	var line1_everyheight=nowHeight/3;
+	line1_y[0]=line1_everyheight;
+	line1_y[1]=line1_everyheight*2;
+	//line2
+	var line2_everywidth=nowWidth/4;
+	line2_x[0]=line2_everywidth;
+	line2_x[1]=line2_everywidth*2;
+	line2_x[2]=line2_everywidth*3;
+}
+function drawBaseLine(){//画出基准线
+	//line2
+	oc.save();
+	oc.strokeStyle='#CCC';
+	for(var n=0;n<line2_x.length;n++){
+		oc.beginPath();
+		oc.moveTo(line2_x[n],0);
+		oc.lineTo(line2_x[n],nowHeight);
+		oc.stroke();
+		oc.closePath();
+	}
+	oc.restore();
+	//line1
+	oc.save();
+	oc.strokeStyle='#000';
+	for(var i=0;i<line1_y.length;i++){
+		oc.beginPath();
+		oc.moveTo(0,line1_y[i]);
+		oc.lineTo(nowWidth,line1_y[i]);
+		oc.stroke();
+		oc.closePath();
+	}
+	oc.restore();
+}
+function drawBaseO(x,y,r,rBorder,fillColor,borderColor){//画一个圆
+	oc.save();
+	oc.beginPath();
+	oc.fillStyle=fillColor;//设置填充颜色
+	oc.strokeStyle=borderColor;//设置边框颜色
+	oc.lineWidth=rBorder;//设置边框粗细
+	oc.arc(x,y,r,0,2*Math.PI,false);
+	oc.fill();
+	if(rBorder!=0){oc.stroke();}//如果设置的是0就不画圆的边框了
+	oc.closePath();
+	oc.restore();
+}
+function clickXY(ev,xy,obj){//此函数返回鼠标的位置
+	var ev = ev || window.event;
+	if(obj){
+		var x=ev.clientX-obj.offsetLeft;
+		var y=ev.clientY-obj.offsetTop;
+		}
+	else{
+		var x=ev.clientX;
+		var y=ev.clientY;
+		};
+	return xy=='x'?x:y;
+	}
+
+</script>
+</body>

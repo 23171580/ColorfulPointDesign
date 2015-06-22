@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>HTML5 Canvas</title>
+<meta name="viewport" content=" width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<style>
+body{
+	margin:0px;
+	padding:0px;
+	}
+#canvas{
+	display:block;
+	margin-left:auto;
+	margin-right:auto;
+	line-height:300px;
+	text-align:center;
+	background: #000;
+	}
+
+</style>
+</head>
+<body>
+<canvas id="canvas">浏览器不支持Canvas</canvas>
+<script src="js/jquery-2.1.1.min.js"></script>
+<script src="js/points.js"></script>
+<script src="js/random-colors.js"></script>
+<script>
+//[预留接口 参数配置]
+//----所有需要幻灯片显示的文字
+//--------displaytext_all   当需要显示的文字只是简单的a~z,0~9时使用此数组配置即可
+//                          比如 ['abc','defg','hi']
+//--------displaytext_super 当需要显示的文字个数超过了单个字符可以表达的数量时，需要采取此方式 
+//                          比如 ['a1-b2-c3','aa-bb-cc','abc-123-a1b2c3']
+//--------displaytext_split 设置出在displaytext_super中你是采用什么当做分隔符的 
+//							比如 '-' '$' '*' '%'							
+//--------附注1   当displaytext_super被赋予任意值后，displaytext_all会自动无效化
+//               所以当不使用超级模式时请保证displaytext_super=new Aray()
+//--------附注2   特殊符号支持见下
+//        		   一般符号  ~@#$%^&*()_-+={}[]|:;<>,.?·		    一般模式下即可
+//        		   空格         直接打出空格                                                              一般模式下即可
+//        		   单引号      SingleQuotes 					    必须在超级解析模式下
+//        		   双引号      DoubleQuotes 					    必须在超级解析模式下
+//        		 /      [/]          				              必须在超级解析模式下
+//        		 \      [\]          				              必须在超级解析模式下
+var displaytext_all=['Welcome','You can customize what will be displayed','It was not packaged','Make Web Fun!','Hello','World','haha','Html5 Js jQuery CSS3','Power By Canvas'];
+var displaytext_super=new Array();
+var displaytext_split='-';
+//----基础Canvas元素的宽度和高度[制作文字时选择的每个文字的尺寸]
+var baseCanvasCellSizeX=200;
+var baseCanvasCellSizeY=240;
+//计划让画布区域有怎样的margin属性
+var canvasMarginLeft=0;
+var canvasMarginTop=0;
+//canvas的padding[设置此值，确保文字不会显示在canvas边界]
+//----这是一个浮点数值，真实的值=canvas宽度*此值
+var canvasPaddingLeft_set=0.1;
+//构成文字的基本元素的半径大小
+//----两个值分别为最小值和最大值，最后的半径会随机介于这两个数之间
+var r_small=10;
+var r_big=20;
+//画布刷新频率
+var refreshInterval_in=30;
+var refreshInterval_out=10;
+
+
+
+
+
+//[以下是系统全局变量 不要动]
+var allballs=new Array();//所有的点
+var display_num=0;//显示上面数组中的第几个
+var displayText='';//当前需要显示的字符串
+var newSizeX=0;//根据屏幕尺寸调整后的新的单位字母的显示宽度和高度
+var newSizeY=0;
+var textPaddingLeft=0;//文字显示区域的padding 为了使其在屏幕正中
+var textPaddingTop=0;
+var sizeZoom=1;//缩放比
+var canvas_interval=null;//当前动作的定时器
+var displaytext_mode='nor';//当前解析显示数组的模式('nor'代表一般)
+var canvasPaddingLeft=0;//左右padding
+
+
+
+
+
+window.onload=function(){
+	displayTextMode();
+	c=document.getElementById('canvas');
+	displayText=displaytext_all[display_num];
+	draw();
+	}
+window.onresize=function(){
+	
+}
+
+function draw(){
+	if(c.getContext('2d')){
+		oc=c.getContext('2d');
+		//所有画图的代码都在这里
+		piontsPlay();
+		//画图代码 结束
+		}
+	else{
+		alert('浏览器不支持')
+		}
+}
+
+function displayTextMode(){//预判断设置的字符数组格式
+	if(displaytext_super.length!=0){
+		displaytext_all=new Array();
+		displaytext_mode='super';
+		for(var i=0;i<displaytext_super.length;i++){
+			displaytext_all.push(displaytext_super[i]);
+		}
+	}
+}
+
+function piontsPlay(){//开始当前文本的动作
+	canvasResetSize();
+	oc.clearRect(0,0,c.width,c.height);//先清空(否则的话改变窗口大小会发生重叠)
+	setPointNumComeIn();//根据需要显示的字设置每个点飞进来时的属性
+	pointsInterval(refreshInterval_in,'in',function(){//进行动画操作,并且写一个回调函数(飞出)		
+		clearInterval(canvas_stop_interval);		
+		setPointNumGoBack();		
+		pointsInterval(refreshInterval_out,'out',function(){//刷新当前动作的画布，设置刷新间隔，以及回调函数
+			clearInterval(canvas_stop_interval);
+			//更新显示数组中第几个数组
+			display_num++;
+			if(display_num==displaytext_all.length){//已经到了该从头开始了
+				display_num=0;
+			}
+			displayText=displaytext_all[display_num];
+			piontsPlay();
+		});
+	});
+}
+
+var allball_num=0;//当前动画下一共有多少小圆点
+var allball_stop_num=0;
+function pointsInterval(n,type,fn){
+	//这个函数产生一个定时器，此定时器的作用是刷新当下动作的画布，每n毫秒刷新一次
+	//----n     每多少毫秒刷新一次
+	//----type  速度模式(返回时的速度和加速度和进来时不一样) 
+	//----------'in'    进入时，使用默认的速度计算方法
+	//----------'out'   飞出时，使用专用的计算方法
+	//----fn    回调函数
+	allball_num=allballs.length;//获取当前动画下有多少的点参加
+	allball_stop_num=0;//初始化[已经到了终点的点]
+	clearInterval(canvas_interval);//取消从前的定时器
+	canvas_stop_interval=setInterval(function(){//启动一个刷新canvas的定时器
+		oc.clearRect(0,0,c.width,c.height);
+		allball_stop_num=0;//初始化[已经到了终点的点];
+		for(var i=0;i<allballs.length;i++){
+			allballs[i].draw();
+			if(allballs[i].type!='arrived'){
+				//根据参数判断此时状态是飞入还是飞出
+				allballs[i].refresh(type);
+			}
+			else{//type值等于arrived,已经到了
+				allball_stop_num++;
+				//alert(allball_stop_num)
+			}
+			//document.getElementById('topbar').innerHTML='此动作下所有的点的个数:'+allball_num+'-'+allball_stop_num;
+		};
+		if((allball_stop_num)>=allball_num){//如果所有的点都已经停止了
+			//alert('pointsInterval 检测到当前动作结束');
+			if(fn()){
+				fn();
+			}
+		}
+	},n)
+}
+
+function canvasResetSize(){//重新设置画布尺寸
+	screenHeight=window.innerHeight;//全局变量-屏幕高度
+	screenWidth=window.innerWidth;//全局变量-屏幕宽度
+	canvasHeight=screenHeight-canvasMarginTop*2;
+	canvasWidth=screenWidth-canvasMarginLeft*2;
+	c.height=canvasHeight;
+	c.width=canvasWidth;
+	c.style.marginTop=canvasMarginTop+'px';
+	//重新获得文字尺寸以及padding
+	if(displaytext_mode!='super'){//不是超级字符模式
+		var textLength=displayText.length;
+	}
+	else{//超级字符模式
+		var textLength=displayText.split(displaytext_split).length;
+	}
+	canvasPaddingLeft=canvasWidth*canvasPaddingLeft_set;//设置真实padding值
+	if((textLength*baseCanvasCellSizeX)<(canvasWidth-canvasPaddingLeft*2)){
+		//按照基本尺寸，文字的宽度还没超过屏幕大小
+		newSizeX=baseCanvasCellSizeX;
+		newSizeY=baseCanvasCellSizeY;
+		sizeZoom=1;
+		textPaddingLeft=Math.floor(((canvasWidth-canvasPaddingLeft*2)-(textLength*baseCanvasCellSizeX))/2);
+		textPaddingTop=Math.floor((canvasHeight-baseCanvasCellSizeY)/2);
+	}
+	else{
+		//文字数量有点多，需要缩放
+		newSizeX=Math.floor((canvasWidth-(canvasPaddingLeft*2))/textLength);
+		newSizeY=Math.floor(baseCanvasCellSizeY*(newSizeX/baseCanvasCellSizeX));
+		sizeZoom=newSizeX/baseCanvasCellSizeX;
+		textPaddingTop=Math.floor((canvasHeight-newSizeY)/2);
+		textPaddingLeft=Math.floor(((canvasWidth-canvasPaddingLeft*2)-(textLength*newSizeX))/2);
+	}
+}
+
+//用构造函数和原型模式综合创建球的对象
+//----构造函数设置属性值
+//----prototype设置方法
+function Ball(canvas,start_x,start_y,end_x,end_y,r,v_step,fill_color,border_color,border_width,type,is_stop_by){
+	//is_stop_by:这个值代表速度控制模式，临界坐标轴选择
+	//----'by-x'代表默认设置(速度=距离/v_step,使用x轴)(不一定是'by-x其他字符也可以')
+	//----'by-y'代表特殊设置(当起始点的横坐标和终点坐标距离很近时，上面的判断方法会导致直接到达终点。这时就使用y轴进行临界判断)(必须是'by-y')
+	//----默认是'by-x'
+	this.canvas=canvas;//目标canvas
+	this.x=start_x;//初始坐标 这个值会在以后被更新
+	this.y=start_y;
+	this.start_x=0;//进入时的原始坐标，在一开始这个坐标和 this.x this.y 相同
+	this.start_y=0;
+	this.end_x=end_x;//结束坐标
+	this.end_y=end_y;
+	this.v_x=0;//速度
+	this.v_y=0;
+	this.r=r;
+	this.v_step=v_step;//设置初始速度时用到的减小v的值
+	this.fill_color=fill_color;
+	this.border_color=border_color;
+	this.border_width=border_width;
+	this.type=type;//这个对象目前的状态(运动中还是已经到了位置'moving'或者'arrived');
+	this.is_stop_by=is_stop_by;//这个点在判断是否已经临近终点时使用x坐标还是y坐标判断
+}
+Ball.prototype={
+	constructor:Ball,
+	setV:function(){//初始化
+		//配置这个点在计算是否很接近目标点时使用那个方向作为判断
+		if(Math.abs(this.end_x-this.x)<10){
+			//筛选出的这个点就是起始位置和重点位置在x轴相差很少的点
+			this.is_stop_by='by-y'
+		}
+		//设置初始的速度
+		this.v_x=(this.end_x-this.x)/this.v_step;
+		this.v_y=(this.end_y-this.y)/this.v_step;
+	},
+	draw:function(){//画出这个对象代表的球
+		this.canvas.save();
+		this.canvas.beginPath();
+		this.canvas.fillStyle=this.fill_color;//设置填充颜色
+		this.canvas.strokeStyle=this.border_color;//设置边框颜色
+		this.canvas.lineWidth=this.border_width;//设置边框粗细
+		this.canvas.arc(this.x,this.y,this.r,0,2*Math.PI,false);
+		this.canvas.fill();
+		if(this.border_width!=0){this.canvas.stroke();}//如果设置的是0就不画圆的边框了
+		this.canvas.closePath();
+		this.canvas.restore();
+	},
+	refresh:function(type){//更新这个对象的横纵坐标和速度
+		//更新坐标
+		this.x+=this.v_x;
+		this.y+=this.v_y;
+		//更新速度
+		//这里有一个判断（根据参数选择是根据x轴还是y轴判断是否到了终点）
+		var is_stop_num=0;//这个值保存着用于下面比较的变量，这个值可以是x或者y轴方向的差值
+		if(this.is_stop_by!='by-y'){//默认情况下使用x轴判断
+			is_stop_num=Math.abs(this.end_x-this.x);
+		}
+		else{//当起始坐标的横坐标就基本上等于终点的横坐标时
+			is_stop_num=Math.abs(this.end_y-this.y);
+		}
+		//根据上面得到的临时变量进行判断是否特别接近了
+		if(is_stop_num<0.5){//绝对值小于一定值就等同于到了
+			this.x=this.end_x;
+			this.y=this.end_y;
+			this.v_x=0;
+			this.v_y=0;
+			this.type='arrived';
+		}
+		else{//还没到
+			//更新速度
+			if(type=='in'){//现在是在进入
+				this.v_x=(this.end_x-this.x)/this.v_step;
+				this.v_y=(this.end_y-this.y)/this.v_step;	
+			}
+			else{//现在正在飞出
+				this.v_x=(this.end_x-this.x)/this.v_step*3;
+				this.v_y=(this.end_y-this.y)/this.v_step*3;
+			}
+		}	
+		
+		//测试
+		//document.getElementById('topbar').innerHTML='type:'+this.type+' x:'+this.x+' y:'+this.y;
+	}
+}
+//创建对象结束
+
+function setPointNumComeIn(){//这个函数可以计算出每个点的所有参数
+	allballs=new Array();
+	if(displaytext_mode=='nor'){//普通模式
+		var temp_length=displayText.length;
+	}
+	else{//超级模式
+		var temp_length=displayText.split(displaytext_split).length;
+	}
+	for(var i=0;i<temp_length;i++){
+			//下面计算横纵坐标偏移
+			var move_x=newSizeX*i;
+			if(displaytext_mode=='nor'){//普通模式
+				var temp_text=displayText.charAt(i);
+			}
+			else{//超级模式
+				var temp_text=displayText.split(displaytext_split)[i];
+			}
+			var temp_x=move_x+textPaddingLeft+canvasPaddingLeft;
+			var temp_y=textPaddingTop;
+			for(var a=0;a<abc[temp_text].length;a++){//每一个字母的所有点
+				var resault_x=(abc[temp_text][a].x)*sizeZoom+temp_x;
+				var resault_y=(abc[temp_text][a].y)*sizeZoom+temp_y;
+				var resault_r=Math.floor(((Math.random()*(r_big-r_small))+r_small)*sizeZoom);//随机的半径
+				var resault_fill_color=fillColors[Math.floor(Math.random()*fillColors.length)];
+				var v_step=Math.random()*10+10;//随机速度
+				//获取起始点位置
+				var start_xy_round=startRound(20);//startRound返回一个数组[x,y]，这两个数值是配套的;参数n是向外扩展值
+				var start_x=start_xy_round[0];
+				var start_y=start_xy_round[1];
+				//创建点的对象
+				var temp_ball=new Ball(oc,start_x,start_y,resault_x,resault_y,resault_r,v_step,resault_fill_color,'#333',0,'','by-x');
+				temp_ball.start_x=start_x;//存入初始坐标，这个坐标在运动中用不到，仅仅做为记录，为返回时做准备
+				temp_ball.start_y=start_y;
+				temp_ball.setV();
+				allballs.push(temp_ball);
+			}
+		}
+}
+function startRound(n){
+	var randomFx=Math.floor(Math.random()*4)+1;//产生随机方向
+	var x=0;
+	var y=0;
+	switch(randomFx){
+		case 1:{x=Math.random()*canvasWidth;y=0-n;};break;//上
+		case 2:{x=Math.random()*canvasWidth;y=canvasHeight+n;};break;//下
+		case 3:{x=0-n;y=Math.random()*canvasHeight;};break;//左
+		default:{x=canvasWidth+n;y=Math.random()*canvasHeight;};//右
+	}
+	var tempArray=new Array(x,y);
+	return tempArray;
+}
+function setPointNumGoBack(){
+	for(var i=0;i<allballs.length;i++){
+		allballs[i].end_x=allballs[i].start_x;
+		allballs[i].end_y=allballs[i].start_y;
+		allballs[i].type='';
+	};
+}
+</script>
+</body>

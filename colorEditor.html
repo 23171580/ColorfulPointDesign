@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Color Editor</title>
+<meta name="viewport" content=" width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<style>
+body{
+	background:#333;
+	margin:0px;
+	}
+#resbar{
+	position: fixed;
+	width: 100%;
+	left: 0px;
+	bottom: 0px;
+	text-align: left;
+	color: #fff;
+	font-size: 14px;
+	background: #000;
+}
+#res-smallpointsbar{
+	height: 30px;
+}
+.res-smallpointsbar-small{
+	-webkit-transition: all 0.3s;
+	float: left;
+	height: 20px;
+	border-top: 5px solid #000;
+	border-bottom: 5px solid #000;
+}
+.res-smallpointsbar-small:hover{
+	border-top: 5px solid #FFF;
+	border-bottom: 5px solid #FFF;
+}
+#res-restextbar{
+	height: 60px;
+}
+#res-restextbar textarea{
+	border: 0px;
+	background: #000;
+	color: #FFF;
+	width: 100%;
+	height: 60px;
+}
+#colorzone{
+	height: 100px;
+	width: 100%;
+}
+#colorzone .one{
+	-webkit-border-radius: 4px;
+	-webkit-transition: all 0.3s;
+	float: left;
+	height: 92px;
+	width: 10%;
+	background: #333;
+}
+#colorzone .one:hover{
+	background: #222;
+	box-shadow: inset 0px 2px 4px #000;
+}
+#colorzone .onechoosed{
+	background: #222;
+}
+#colorzone .one .color{
+	-webkit-border-radius: 15px;
+	box-shadow: 0px 4px 6px #000;
+	width: 30px;
+	height: 30px;
+	border: 1px solid #FFF;
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 20px;
+	margin-bottom: 10px;
+}
+#colorzone .one .text{
+	width:100%;
+	height: 30px;
+	line-height: 30px;
+	text-align: center;
+	font-size: 12px;
+	color: #FFF;
+}
+</style>
+</head>
+<body>
+<div id="colorzone"></div>
+<div id="resbar">
+	<div id="res-smallpointsbar"></div>
+	<div id="res-restextbar">
+		<textarea></textarea>
+	</div>
+</div>
+<script src="js/jquery-2.1.1.min.js"></script>
+<script src="js/all-colors.js"></script>
+<script>
+var choose_color=new Array();
+var choose_color_res=new Array();
+window.onload=function(){
+	for(var i=0;i<allcolor.length;i++){
+		var tempDom='<div class="one" val="'+allcolor[i]+'" choosed=0 ><div class="color" style="background: '+allcolor[i]+';"></div><div class="text">'+allcolor[i]+'</div></div>';
+		$('#colorzone').append(tempDom);
+	};
+	//添加选择颜色的事件
+	$('.one').click(function(){
+		if($(this).attr('choosed')==0){
+			$(this).attr('choosed',1);
+		}
+		else{
+			$(this).attr('choosed',0);
+		}
+		setVal();
+		setUI();
+	})
+}
+function setVal(){
+	choose_color=new Array();
+	choose_color_res=new Array();
+	//向数组中添加数据
+	$('.one').each(function(){
+		if($(this).attr('choosed')==1){
+			choose_color.push($(this).attr('val'));
+			choose_color_res.push('\''+$(this).attr('val')+'\'');
+		}
+	})
+}
+function setUI(){
+	//反馈文字
+	$('#res-restextbar textarea').html('var fillColors=new Array('+choose_color_res.join(',')+')');
+	//颜色示例和
+	var res_pointsbar=$('#res-smallpointsbar');
+	res_pointsbar.html('');
+	var temp_width=100/choose_color.length;
+	for(var i=0;i<choose_color.length;i++){
+		var temp_small='<div class="res-smallpointsbar-small" style="width:'+temp_width+'%;background:'+choose_color[i]+';"></div>';
+		res_pointsbar.append(temp_small);
+	}
+	$('.one').each(function(index){
+		//刷新上面按钮的颜色
+		$(this).removeClass('onechoosed')
+		if($(this).attr('choosed')==1){
+			$(this).addClass('onechoosed')
+		}
+	})
+}
+</script>
+</body>
